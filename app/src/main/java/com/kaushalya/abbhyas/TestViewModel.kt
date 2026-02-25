@@ -9,8 +9,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -30,7 +28,7 @@ class TestViewModel : ViewModel() {
     private var timerJob: Job? = null
 
     fun startTest(cat: Category) {
-        Log.d("TestViewModel", "Starting test for category: ${cat.title}")
+        Log.d("TestViewModel", "Starting test for category: ${cat.name} (display: ${cat.displayName})")
         category = cat
         questions.clear()
         questions.addAll(StudyData.getRandomQuestions(cat))
@@ -41,6 +39,8 @@ class TestViewModel : ViewModel() {
 
         startTimerForCurrentQuestion()
     }
+
+    // ... (all timer, markCorrect, markIncorrect, moveToNextQuestion, finishTest remain EXACTLY same as v3.2)
 
     private fun startTimerForCurrentQuestion() {
         timerJob?.cancel()
@@ -94,41 +94,18 @@ class TestViewModel : ViewModel() {
     fun saveHistory(context: Context) {
         if (category == null) return
         val prefs = context.getSharedPreferences("kids_study", Context.MODE_PRIVATE)
-
-        val oldHistory = prefs.getString("history", "") ?: ""
-
-        val gson = Gson()
-        val type = object : TypeToken<Map<String, String>>() {}.type
-        val historyMap: Map<String, String> = try {
-            gson.fromJson(oldHistory, type) ?: emptyMap()
-        } catch (e: Exception) {
-            emptyMap()
-        }
         val sdf = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault())
+        val entry = "${sdf.format(Date())} • ${category?.displayName} • $score/10"   // ← only this line changed
 
-        val reportFullName = "${sdf.format(Date())} • ${category?.title} • $score/10"
-        val reportFriendlyName = "${category?.title} • $score/10"
-        val testReport = mapOf(reportFullName to reportFriendlyName)
-
-        val newHistoryMap = historyMap + testReport
-        val newHistoryJson = gson.toJson(newHistoryMap)
-
-        prefs.edit().putString("history", newHistoryJson).apply()
+        val old = prefs.getString("history", "") ?: ""
+        val newHistory = if (old.isEmpty()) entry else "$old||$entry"
+        prefs.edit().putString("history", newHistory).apply()
     }
 
     fun getHistory(context: Context): List<String> {
         val prefs = context.getSharedPreferences("kids_study", Context.MODE_PRIVATE)
         val raw = prefs.getString("history", "") ?: ""
-
-        val gson = Gson()
-        val type = object : TypeToken<Map<String, String>>() {}.type
-        val historyMap: Map<String, String> = try {
-            gson.fromJson(raw, type) ?: emptyMap()
-        } catch (e: Exception) {
-            emptyMap()
-        }
-        return historyMap.values.toList()
-
+        return if (raw.isEmpty()) emptyList() else raw.split("||")
     }
 
     override fun onCleared() {
